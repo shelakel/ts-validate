@@ -1,0 +1,29 @@
+{
+  "name": "ts-validate",
+  "version": "1.0.0",
+  "description": "Validation library for TypeScript supporting sync and async validation with state",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shelakel/ts-validate.git"
+  },
+  "keywords": [
+    "TypeScript",
+    "validate"
+  ],
+  "author": "Shelakel",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/shelakel/ts-validate/issues"
+  },
+  "homepage": "https://github.com/shelakel/ts-validate#readme",
+  "devDependencies": {
+    "tslint": "^3.10.2",
+    "typescript": "^1.8.10"
+  }
+}

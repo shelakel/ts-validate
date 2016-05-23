@@ -1,4 +1,4 @@
-import {createValidator, combineValidators, ValidationState, Validator, ValidateResult} from "../../src/Validate";
+import {createValidator, combineValidateResults, ValidationState, Validator, ValidateResult} from "../../src/Validate";
 import {Action, guard, HasValidationState} from "./Common";
 
 export const actions = {
@@ -29,8 +29,8 @@ const validatePassword = createValidator<string>(
     []
 );
 
-const validateModel: ((model: any) => Validator) =
-    model => combineValidators(
+const validateModel: ((model: any) => ValidateResult) =
+    model => combineValidateResults(
         validateUsername(model.username),
         validatePassword(model.password)
     );

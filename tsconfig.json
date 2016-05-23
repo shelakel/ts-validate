@@ -11,7 +11,11 @@
         "outDir": "dist"
     },
     "files": [
-        "src/Validate.ts"
+        "src/Validate.ts",
+        "src/Validators/Email.ts",
+        "src/Validators/NotEmpty.ts",
+        "src/Validators/RegExp.ts",
+        "src/Validators/StringLength.ts"
     ],
     "formatCodeOptions": {
         "indentSize": 4,

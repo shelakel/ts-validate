@@ -1,316 +1,164 @@
 // todo: avoid Object.assign - user provided function
 //       note es5 compatibility polyfills required
 //       Promise<ValidateResult> musn't throw errors**
+// other validation methods: https://jqueryvalidation.org/documentation/
 
-export interface State {
-    error?: string;
+export interface ValidationState { [key: string]: string; }
+export interface ValidateResult {
+    validationState: ValidationState;
+    futureValidationState?: Promise<ValidationState>;
 }
 
-export interface SyncValidator<TValue, TState extends State> {
-    (oldState: TState, value: TValue): TState;
-}
-
-export interface AsyncValidator<TValue, TState extends State> {
-    (oldState: TState, value: TValue): Promise<TState>;
-}
-
-export interface ValidateResult<TModel> {
-    newModel: TModel;
-    updateModel?: Promise<UpdateModel<TModel>>;
-}
-
-export interface Validator<TModel> {
-    (model: TModel): ValidateResult<TModel>;
-}
-
-export interface GetValue<TModel, TValue> {
-    (model: TModel): TValue;
-}
-
-export interface GetState<TModel, TState extends State> {
-    (model: TModel): TState;
-}
-
-export interface UpdateModel<TModel> {
-    (model: TModel): TModel;
-}
-
-export interface SetState<TModel, TState extends State> {
-    (state: TState): UpdateModel<TModel>;
-}
+export interface SyncValidator<T> { (value: T): string; }
+export interface AsyncValidator<T> { (value: T): Promise<string>; }
+export interface Validator<T> { (value: T): ValidateResult; }
 
 // validation functions
 
-export interface IsValid<TValue> {
-    (value: TValue): boolean;
+export interface IsValid<T> { (value: T): boolean; }
+export interface ValidatorOptions { errorMessage: string; }
+
+export interface SyncValidatorOptions<T> extends ValidatorOptions {
+    isValid: IsValid<T>;
 }
 
-export function isNotEmpty(value: string): boolean {
-    return value.length > 0;
-}
-
-export interface StringLengthBetweenOptions {
-    minLength?: number;
-    maxLength?: number;
-}
-
-export function isStringLengthBetween(options: StringLengthBetweenOptions): IsValid<string> {
-    const minLength = (options.minLength || 0) | 0;
-    const maxLength = (options.maxLength ? options.maxLength | 0 : null);
-    if (minLength < 0) {
-        throw new Error("minLength must be greater than or equal to 0");
+/**
+ * createSyncValidator<T> creates a SyncValidator<T> to validate a value of type T.
+ * @param {SyncValidatorOptions<T>} options Options to configure the SyncValidator<T>.
+ * @returns {SyncValidator<T>} Returns a SyncValidator<T> to validate a value of type T.
+ */
+export function createSyncValidator<T>(options: SyncValidatorOptions<T>
+): SyncValidator<T> {
+    const { isValid, errorMessage } = options;
+    if (!errorMessage) {
+        throw new Error("errorMessage must not be falsey (undefined, null or empty)");
     }
-    if (maxLength != null) {
-        if (maxLength < 0) {
-            throw new Error("maxLength must be greater than or equal to 0");
+    return function (value: T): string {
+        if (isValid(value)) {
+            return null;
         }
-        if (maxLength < minLength) {
-            throw new Error("maxLength must be greater than or equal to minLength");
-        }
-        if (minLength === 0) {
-            return function (value: string): boolean {
-                return value.length <= maxLength;
-            };
-        }
-        return function (value: string): boolean {
-            return value.length >= minLength && value.length <= maxLength;
-        };
-    }
-    if (minLength === 0) {
-        return function (value: string): boolean { return true; };
-    }
-    return function (value: string): boolean {
-        return value.length >= minLength;
+        return errorMessage;
     };
 }
 
-const reEmail = new RegExp("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$", "i");
-
-export function isValidEmail(value: string): boolean {
-    return reEmail.test(value);
-}
-
-// basic validators
-
-export interface ValidatorOptions {
-    errorMessage: string;
-}
-
-export function notEmpty<TState extends State>(options: ValidatorOptions): SyncValidator<string, TState> {
-    return createBasicValidator<string, TState>({
-        isValid: isNotEmpty,
-        errorMessage: options.errorMessage
-    });
-}
-
-export interface StringLengthBetweenValidatorOptions extends ValidatorOptions, StringLengthBetweenOptions { }
-
-export function stringLengthBetween<TState extends State>(options: StringLengthBetweenValidatorOptions): SyncValidator<string, TState> {
-    return createBasicValidator<string, TState>({
-        isValid: isStringLengthBetween(options),
-        errorMessage: options.errorMessage
-    });
-}
-
-export interface RegExpValidatorOptions extends ValidatorOptions {
-    regExp: RegExp;
-}
-
-export function regexp<TState extends State>(options: RegExpValidatorOptions): SyncValidator<string, TState> {
-    return createBasicValidator<string, TState>({
-        isValid: options.regExp.test,
-        errorMessage: options.errorMessage
-    });
-}
-
+/**
+ * isEmptyOr checks that the value is empty, null, undefined or isValid.
+ * @param {IsValid<string>} isValid A function to determine if the non-empty|null|undefined value is invalid.
+ * @returns {boolean} Returns a boolean value indicating whether the value is valid.
+ */
 export function isEmptyOr(isValid: IsValid<string>): IsValid<string> {
     return function (value: string): boolean {
-        return value.length === 0 || isValid(value);
-    };
-}
-
-export function email<TState extends State>(options: ValidatorOptions): SyncValidator<string, TState> {
-    return createBasicValidator<string, TState>({
-        isValid: isEmptyOr(isValidEmail),
-        errorMessage: options.errorMessage
-    });
-}
-
-export interface BasicValidatorOptions<TValue> extends ValidatorOptions {
-    isValid: IsValid<TValue>;
-}
-
-export function createBasicValidator<TValue, TState extends State>(options: BasicValidatorOptions<TValue>): SyncValidator<TValue, TState> {
-    const { isValid, errorMessage } = options;
-    return function (oldState: TState, value: TValue): TState {
-        if (isValid(value)) {
-            return oldState;
-        }
-        return Object.assign({}, oldState, { error: errorMessage });
-    };
-}
-
-// helper functions
-
-export function isValid(state: State): boolean {
-    return state.error == null;
-}
-
-export function isInvalid(state: State): boolean {
-    return state.error != null;
-}
-
-export function isValidModel<TModel>(getStates: GetState<TModel, State>[]): ((model: TModel) => boolean) {
-    if (getStates.length === 0) {
-        return function (model: TModel): boolean {
-            return true;
-        };
-    }
-    return function (model: TModel): boolean {
-        for (const getState of getStates) {
-            const state = getState(model);
-            if (isInvalid(state)) {
-                return false;
-            }
-        }
-        return true;
-    };
-}
-
-export function isInvalidModel<TModel>(getStates: GetState<TModel, State>[]): ((model: TModel) => boolean) {
-    if (getStates.length === 0) {
-        return function (model: TModel): boolean {
-            return false;
-        };
-    }
-    return function (model: TModel): boolean {
-        for (const getState of getStates) {
-            const state = getState(model);
-            if (isValid(state)) {
-                return false;
-            }
-        }
-        return true;
-    };
-}
-
-export function listModelErrors<TModel>(getStates: GetState<TModel, State>[]): ((model: TModel) => string[]) {
-    return function (model: TModel): string[] {
-        return getStates
-            .map(getState => getState(model))
-            .filter(isInvalid)
-            .map(state => state.error);
+        return !value || isValid(value);
     };
 }
 
 // validation
 
-export function createValidator<TModel, TValue, TState extends State>(
-    getValue: GetValue<TModel, TValue>,
-    getState: GetState<TModel, TState>,
-    setState: SetState<TModel, TState>,
-    syncValidators: SyncValidator<TValue, TState>[],
-    asyncValidators: AsyncValidator<TValue, TState>[]
-): Validator<TModel> {
-    return function (model: TModel): ValidateResult<TModel> {
-        const initialState = getState(model);
-        const value = getValue(model);
-        const syncState = validateSync(value, Object.assign({}, initialState, { error: null }), syncValidators);
-        if (isValid(syncState) && asyncValidators.length > 0) {
+/**
+ * createValidator<T> creates a new validator to validate a value of type T.
+ * @param {string} stateKey The key to the error in the validation state.
+ * @param {SyncValidator<T>[]} syncValidators An array of SyncValidator<T> to validate the value.
+ * @param {AsyncValidator<T>[]} asyncValidators An array of AsyncValidator<T> to validate the value.
+ * @returns {(value: T) => Validator} Returns a function that takes the value to validate, and returns a Validator.
+ */
+export function createValidator<T>(
+    stateKey: string,
+    syncValidators: SyncValidator<T>[],
+    asyncValidators: AsyncValidator<T>[]
+): Validator<T> {
+    return function (value: T): ValidateResult {
+        const error: string = validateSync(value, syncValidators || []);
+        let validationState: ValidationState = { [stateKey]: error };
+        let futureValidationState: Promise<ValidationState> = null;
+        if (!error && asyncValidators && asyncValidators.length > 0) {
             // retain the old error when validating async to avoid the flash
             // when previous async validation state was invalid,
             // the current synchronous validation state is invalid
             // and the next async validation state is invalid
-            const asyncState = Object.assign({}, syncState, { error: initialState.error });
-            return {
-                newModel: setState(asyncState)(model),
-                updateModel: validateAsync(value, syncState, asyncValidators)
-                    .then<UpdateModel<TModel>>((state) => Promise.resolve(setState(state)))
-            };
-        } else {
-            return {
-                newModel: setState(syncState)(model),
-                updateModel: null
-            };
+            delete (validationState, stateKey);
+            futureValidationState = validateAsync(value, asyncValidators)
+                .then<ValidationState>((error: string) => { return { [stateKey]: error }; });
         }
+        return {
+            validationState,
+            futureValidationState
+        };
     };
 }
 
-function validateSync<TValue, TState extends State>(
-    value: TValue,
-    initialState: TState,
-    validators: SyncValidator<TValue, TState>[]
-): TState {
-    let state = initialState;
+function validateSync<T>(
+    value: T,
+    validators: SyncValidator<T>[]
+): string {
+    let error = null;
     for (const validate of validators) {
-        if (isInvalid(state)) {
+        if (!!error) {
             break;
         }
-        state = validate(state, value);
+        error = validate(value);
     }
-    return state;
+    return error;
 }
 
-function validateAsync<TValue, TState>(
-    value: TValue,
-    initialState: TState,
-    validators: AsyncValidator<TValue, TState>[]
-): Promise<TState> {
+function validateAsync<T>(
+    value: T,
+    validators: AsyncValidator<T>[]
+): Promise<string> {
     if (validators.length === 0) {
         return null;
     }
-    return validators.reduce<Promise<TState>>(
-        (promise: Promise<TState>, validate: AsyncValidator<TValue, TState>) => {
-            return promise.then<TState>(
-                (state) => {
-                    if (isValid(state)) {
-                        return validate(state, value);
+    return validators.reduce<Promise<string>>(
+        (promise: Promise<string>, validate: AsyncValidator<T>) => {
+            return promise.then<string>(
+                error => {
+                    if (!error) {
+                        return validate(value);
                     } else {
-                        return Promise.resolve(state);
+                        return error;
                     }
                 }
             );
         },
-        Promise.resolve(initialState)
+        Promise.resolve(null)
     );
 }
 
-interface CombineValidatorsResult<TModel> {
-    model: TModel;
-    promises: Promise<UpdateModel<TModel>>[];
+interface CombineValidatorsResult {
+    newValidationState: ValidationState;
+    futureValidationStates: Promise<ValidationState>[];
 }
 
-export function combineValidators<TModel>(
-    ...validators: Validator<TModel>[]
-): Validator<TModel> {
-    return function (initialModel: TModel): ValidateResult<TModel> {
-        const { model, promises } = validators.reduce<CombineValidatorsResult<TModel>>(
-            ({model, promises}, validate) => {
-                const {newModel, updateModel} = validate(model);
-                if (updateModel == null) {
-                    return { model: newModel, promises };
+/**
+ * combineValidateResults combines the validation results of one or more validators.
+ * @param {ValidateResult[]} results The validation results to combine.
+ * @returns {ValidateResult} Returns the combined validation result.
+ */
+export function combineValidateResults(
+    ...results: ValidateResult[]
+): ValidateResult {
+    const { newValidationState, futureValidationStates } =
+        (results || []).reduce<CombineValidatorsResult>(
+            ({newValidationState, futureValidationStates},
+                {validationState, futureValidationState}) => {
+                if (futureValidationState != null) {
+                    futureValidationStates.push(futureValidationState);
                 }
-                return { model: newModel, promises: promises.concat(updateModel) };
+                return {
+                    newValidationState: Object.assign(newValidationState, validationState),
+                    futureValidationStates
+                };
             },
-            { model: initialModel, promises: [] }
+            { newValidationState: {}, futureValidationStates: [] }
         );
-        if (promises.length === 0) {
-            return {
-                newModel: model,
-                updateModel: null
-            };
-        }
+    if (futureValidationStates.length === 0) {
         return {
-            newModel: model,
-            updateModel: Promise.all<UpdateModel<TModel>>(promises).then<UpdateModel<TModel>>(
-                updateModels => {
-                    return function (model: TModel): TModel {
-                        return updateModels.reduce<TModel>(
-                            (model, transform) => transform(model),
-                            model
-                        );
-                    };
-                })
+            validationState: newValidationState,
+            futureValidationState: null
         };
+    }
+    return {
+        validationState: newValidationState,
+        futureValidationState: Promise.all<ValidationState>(futureValidationStates)
+            .then<ValidationState>(validationStates => Object.assign({}, ...validationStates))
     };
 }

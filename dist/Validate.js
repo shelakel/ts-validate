@@ -1,209 +1,86 @@
 "use strict";
-function isNotEmpty(value) {
-    return value.length > 0;
-}
-exports.isNotEmpty = isNotEmpty;
-function isStringLengthBetween(options) {
-    const minLength = (options.minLength || 0) | 0;
-    const maxLength = (options.maxLength ? options.maxLength | 0 : null);
-    if (minLength < 0) {
-        throw new Error("minLength must be greater than or equal to 0");
-    }
-    if (maxLength != null) {
-        if (maxLength < 0) {
-            throw new Error("maxLength must be greater than or equal to 0");
-        }
-        if (maxLength < minLength) {
-            throw new Error("maxLength must be greater than or equal to minLength");
-        }
-        if (minLength === 0) {
-            return function (value) {
-                return value.length <= maxLength;
-            };
-        }
-        return function (value) {
-            return value.length >= minLength && value.length <= maxLength;
-        };
-    }
-    if (minLength === 0) {
-        return function (value) { return true; };
+function createSyncValidator(options) {
+    const { isValid, errorMessage } = options;
+    if (!errorMessage) {
+        throw new Error("errorMessage must not be falsey (undefined, null or empty)");
     }
     return function (value) {
-        return value.length >= minLength;
+        if (isValid(value)) {
+            return null;
+        }
+        return errorMessage;
     };
 }
-exports.isStringLengthBetween = isStringLengthBetween;
-const reEmail = new RegExp("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$", "i");
-function isValidEmail(value) {
-    return reEmail.test(value);
-}
-exports.isValidEmail = isValidEmail;
-function notEmpty(options) {
-    return createBasicValidator({
-        isValid: isNotEmpty,
-        errorMessage: options.errorMessage
-    });
-}
-exports.notEmpty = notEmpty;
-function stringLengthBetween(options) {
-    return createBasicValidator({
-        isValid: isStringLengthBetween(options),
-        errorMessage: options.errorMessage
-    });
-}
-exports.stringLengthBetween = stringLengthBetween;
-function regexp(options) {
-    return createBasicValidator({
-        isValid: options.regExp.test,
-        errorMessage: options.errorMessage
-    });
-}
-exports.regexp = regexp;
+exports.createSyncValidator = createSyncValidator;
 function isEmptyOr(isValid) {
     return function (value) {
-        return value.length === 0 || isValid(value);
+        return !value || isValid(value);
     };
 }
 exports.isEmptyOr = isEmptyOr;
-function email(options) {
-    return createBasicValidator({
-        isValid: isEmptyOr(isValidEmail),
-        errorMessage: options.errorMessage
-    });
-}
-exports.email = email;
-function createBasicValidator(options) {
-    const { isValid, errorMessage } = options;
-    return function (oldState, value) {
-        if (isValid(value)) {
-            return oldState;
+function createValidator(stateKey, syncValidators, asyncValidators) {
+    return function (value) {
+        const error = validateSync(value, syncValidators || []);
+        let validationState = { [stateKey]: error };
+        let futureValidationState = null;
+        if (!error && asyncValidators && asyncValidators.length > 0) {
+            delete (validationState, stateKey);
+            futureValidationState = validateAsync(value, asyncValidators)
+                .then((error) => { return { [stateKey]: error }; });
         }
-        return Object.assign({}, oldState, { error: errorMessage });
-    };
-}
-exports.createBasicValidator = createBasicValidator;
-function isValid(state) {
-    return state.error == null;
-}
-exports.isValid = isValid;
-function isInvalid(state) {
-    return state.error != null;
-}
-exports.isInvalid = isInvalid;
-function isValidModel(getStates) {
-    if (getStates.length === 0) {
-        return function (model) {
-            return true;
+        return {
+            validationState: validationState,
+            futureValidationState: futureValidationState
         };
-    }
-    return function (model) {
-        for (const getState of getStates) {
-            const state = getState(model);
-            if (isInvalid(state)) {
-                return false;
-            }
-        }
-        return true;
-    };
-}
-exports.isValidModel = isValidModel;
-function isInvalidModel(getStates) {
-    if (getStates.length === 0) {
-        return function (model) {
-            return false;
-        };
-    }
-    return function (model) {
-        for (const getState of getStates) {
-            const state = getState(model);
-            if (isValid(state)) {
-                return false;
-            }
-        }
-        return true;
-    };
-}
-exports.isInvalidModel = isInvalidModel;
-function listModelErrors(getStates) {
-    return function (model) {
-        return getStates
-            .map(getState => getState(model))
-            .filter(isInvalid)
-            .map(state => state.error);
-    };
-}
-exports.listModelErrors = listModelErrors;
-function createValidator(getValue, getState, setState, syncValidators, asyncValidators) {
-    return function (model) {
-        const initialState = getState(model);
-        const value = getValue(model);
-        const syncState = validateSync(value, Object.assign({}, initialState, { error: null }), syncValidators);
-        if (isValid(syncState) && asyncValidators.length > 0) {
-            const asyncState = Object.assign({}, syncState, { error: initialState.error });
-            return {
-                newModel: setState(asyncState)(model),
-                updateModel: validateAsync(value, syncState, asyncValidators)
-                    .then((state) => Promise.resolve(setState(state)))
-            };
-        }
-        else {
-            return {
-                newModel: setState(syncState)(model),
-                updateModel: null
-            };
-        }
     };
 }
 exports.createValidator = createValidator;
-function validateSync(value, initialState, validators) {
-    let state = initialState;
+function validateSync(value, validators) {
+    let error = null;
     for (const validate of validators) {
-        if (isInvalid(state)) {
+        if (!!error) {
             break;
         }
-        state = validate(state, value);
+        error = validate(value);
     }
-    return state;
+    return error;
 }
-function validateAsync(value, initialState, validators) {
+function validateAsync(value, validators) {
     if (validators.length === 0) {
         return null;
     }
     return validators.reduce((promise, validate) => {
-        return promise.then((state) => {
-            if (isValid(state)) {
-                return validate(state, value);
+        return promise.then(error => {
+            if (!error) {
+                return validate(value);
             }
             else {
-                return Promise.resolve(state);
+                return error;
             }
         });
-    }, Promise.resolve(initialState));
+    }, Promise.resolve(null));
 }
-function combineValidators(...validators) {
-    return function (initialModel) {
-        const { model, promises } = validators.reduce(({ model, promises }, validate) => {
-            const { newModel, updateModel } = validate(model);
-            if (updateModel == null) {
-                return { model: newModel, promises: promises };
-            }
-            return { model: newModel, promises: promises.concat(updateModel) };
-        }, { model: initialModel, promises: [] });
-        if (promises.length === 0) {
-            return {
-                newModel: model,
-                updateModel: null
-            };
+function combineValidateResults(...results) {
+    const { newValidationState, futureValidationStates } = (results || []).reduce(({ newValidationState, futureValidationStates }, { validationState, futureValidationState }) => {
+        if (futureValidationState != null) {
+            futureValidationStates.push(futureValidationState);
         }
         return {
-            newModel: model,
-            updateModel: Promise.all(promises).then(updateModels => {
-                return function (model) {
-                    return updateModels.reduce((model, transform) => transform(model), model);
-                };
-            })
+            newValidationState: Object.assign(newValidationState, validationState),
+            futureValidationStates: futureValidationStates
         };
+    }, { newValidationState: {}, futureValidationStates: [] });
+    if (futureValidationStates.length === 0) {
+        return {
+            validationState: newValidationState,
+            futureValidationState: null
+        };
+    }
+    return {
+        validationState: newValidationState,
+        futureValidationState: Promise.all(futureValidationStates)
+            .then(validationStates => Object.assign({}, ...validationStates))
     };
 }
-exports.combineValidators = combineValidators;
+exports.combineValidateResults = combineValidateResults;
 //# sourceMappingURL=Validate.js.map

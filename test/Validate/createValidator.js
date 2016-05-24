@@ -52,7 +52,7 @@ module.exports = function (assert, createValidator, validators) {
                     value => Promise.resolve(value ? "null" : "Username is required")
                 ]);
                 const result = validate("");
-                assert(result.validationState.username === null);
+                assert(!Object.hasOwnProperty(result.validationState.username));
                 assert(result.futureValidationState != null);
                 return result.futureValidationState.then(validationState => assert(validationState.username === "Username is required"));
             });

@@ -23,8 +23,8 @@ module.exports = function (assert, Validate) {
                 createValidator("password", [], [value => Promise.resolve(value ? null : "Password is required")]);
 
             const combinedResult = combineValidateResults(validateUsername(""), validatePassword(""));
-            assert(combinedResult.validationState.username === null);
-            assert(combinedResult.validationState.password === null);
+            assert(!Object.hasOwnProperty(combinedResult.validationState.username));
+            assert(!Object.hasOwnProperty(combinedResult.validationState.password));
             assert(combinedResult.futureValidationState !== null);
             return combinedResult.futureValidationState.then(validationState => {
                 assert(validationState.username === "Username is required");

@@ -1,6 +1,9 @@
 "use strict";
 function createSyncValidator(options) {
     const { isValid, errorMessage } = options;
+    if (!isFunction(isValid)) {
+        throw new Error("isValid must be a function.");
+    }
     if (!errorMessage) {
         throw new Error("errorMessage must not be falsey (undefined, null or empty)");
     }
@@ -19,26 +22,57 @@ function isEmptyOr(isValid) {
 }
 exports.isEmptyOr = isEmptyOr;
 function createValidator(stateKey, syncValidators, asyncValidators) {
-    return function (value) {
-        const error = validateSync(value, syncValidators || []);
-        let validationState = { [stateKey]: error };
-        let futureValidationState = null;
-        if (!error && asyncValidators && asyncValidators.length > 0) {
-            delete (validationState, stateKey);
-            futureValidationState = validateAsync(value, asyncValidators)
-                .then((error) => { return { [stateKey]: error }; });
-        }
-        return {
-            validationState: validationState,
-            futureValidationState: futureValidationState
+    if (!syncValidators) {
+        syncValidators = [];
+    }
+    if (!asyncValidators) {
+        asyncValidators = [];
+    }
+    const toValidationState = error => {
+        return { [stateKey]: error };
+    };
+    if (syncValidators.length > 0 && asyncValidators.length === 0) {
+        return function (value) {
+            return {
+                validationState: toValidationState(validateSync(value, syncValidators)),
+                futureValidationState: null
+            };
         };
+    }
+    if (asyncValidators.length > 0 && syncValidators.length === 0) {
+        return function (value) {
+            return {
+                validationState: {},
+                futureValidationState: validateAsync(value, asyncValidators)
+                    .then(toValidationState)
+            };
+        };
+    }
+    if (syncValidators.length > 0 && asyncValidators.length > 0) {
+        return function (value) {
+            const error = validateSync(value, syncValidators || []);
+            let validationState = toValidationState(error);
+            let futureValidationState = null;
+            if (!error) {
+                delete (validationState, stateKey);
+                futureValidationState = validateAsync(value, asyncValidators)
+                    .then(toValidationState);
+            }
+            return {
+                validationState: validationState,
+                futureValidationState: futureValidationState
+            };
+        };
+    }
+    return function (value) {
+        return { validationState: toValidationState(null), futureValidationState: null };
     };
 }
 exports.createValidator = createValidator;
 function validateSync(value, validators) {
     let error = null;
     for (const validate of validators) {
-        if (!!error) {
+        if (error) {
             break;
         }
         error = validate(value);
@@ -46,9 +80,6 @@ function validateSync(value, validators) {
     return error;
 }
 function validateAsync(value, validators) {
-    if (validators.length === 0) {
-        return null;
-    }
     return validators.reduce((promise, validate) => {
         return promise.then(error => {
             if (!error) {
@@ -83,4 +114,5 @@ function combineValidateResults(...results) {
     };
 }
 exports.combineValidateResults = combineValidateResults;
+function isFunction(obj) { return !!(obj && obj.constructor && obj.call && obj.apply); }
 //# sourceMappingURL=Validate.js.map

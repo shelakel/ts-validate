@@ -41,5 +41,5 @@ function merge(model: Model, ...changes: {}[]) {
 }
 
 function mergeValidationState(model: Model, action: Action<HasValidationState>) {
-    return Object.assign({}, model.validationState, action.payload.validationState);;
+    return Object.assign({}, model.validationState, action.payload.validationState);
 }

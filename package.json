@@ -5,6 +5,7 @@
   "files": [
     "src"
   ],
+  "main": "dist/Validate.js",
   "scripts": {
     "test": "tsc -p . && mocha"
   },
@@ -24,8 +25,8 @@
   "homepage": "https://github.com/shelakel/ts-validate#readme",
   "devDependencies": {
     "chai": "^3.5.0",
-    "mocha": "^2.5.1",
-    "tslint": "^3.10.2",
-    "typescript": "^1.8.10"
+    "mocha": "^3.2.0",
+    "tslint": "^5.0.0",
+    "typescript": "^2.2.2"
   }
 }

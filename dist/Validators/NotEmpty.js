@@ -1,4 +1,5 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 const Validate_1 = require("../Validate");
 function isNotEmpty(value) { return !!value; }
 exports.isNotEmpty = isNotEmpty;

@@ -96,7 +96,7 @@ export function createValidator<T>(
                 // when previous async validation state was invalid,
                 // the current synchronous validation state is invalid
                 // and the next async validation state is invalid
-                delete (validationState, stateKey);
+                delete (validationState.stateKey);
                 futureValidationState = validateAsync(value, asyncValidators)
                     .then<ValidationState>(toValidationState);
             }

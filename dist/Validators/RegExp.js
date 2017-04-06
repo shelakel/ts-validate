@@ -1,4 +1,5 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 const Validate_1 = require("../Validate");
 function regExp(options) {
     const isValid = value => options.regExp.test(value);

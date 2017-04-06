@@ -1,4 +1,5 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 function createSyncValidator(options) {
     const { isValid, errorMessage } = options;
     if (!isFunction(isValid)) {
@@ -54,13 +55,13 @@ function createValidator(stateKey, syncValidators, asyncValidators) {
             let validationState = toValidationState(error);
             let futureValidationState = null;
             if (!error) {
-                delete (validationState, stateKey);
+                delete (validationState.stateKey);
                 futureValidationState = validateAsync(value, asyncValidators)
                     .then(toValidationState);
             }
             return {
-                validationState: validationState,
-                futureValidationState: futureValidationState
+                validationState,
+                futureValidationState
             };
         };
     }
@@ -98,7 +99,7 @@ function combineValidateResults(...results) {
         }
         return {
             newValidationState: Object.assign(newValidationState, validationState),
-            futureValidationStates: futureValidationStates
+            futureValidationStates
         };
     }, { newValidationState: {}, futureValidationStates: [] });
     if (futureValidationStates.length === 0) {

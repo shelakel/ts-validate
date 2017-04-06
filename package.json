@@ -6,6 +6,7 @@
     "src"
   ],
   "main": "dist/Validate.js",
+  "typings": "dist/Validate.d.ts",
   "scripts": {
     "test": "tsc -p . && mocha"
   },
